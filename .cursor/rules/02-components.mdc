@@ -1,0 +1,26 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Components Structure
+
+The application components are organized into several categories:
+
+## Chat Components
+Located in [components/chat/](mdc:components/chat/) and include:
+- [Chat.tsx](mdc:components/chat/Chat.tsx) - Main chat interface container
+- [ChatMessage.tsx](mdc:components/chat/ChatMessage.tsx) - Individual message display
+- [ChatInput.tsx](mdc:components/chat/ChatInput.tsx) - Message input and submission
+- [Sidebar.tsx](mdc:components/chat/Sidebar.tsx) - Chat sessions sidebar
+
+## UI Components
+Located in [components/ui/](mdc:components/ui/) and include reusable UI elements following the Shadcn UI pattern.
+
+## Data Visualization Components
+Special components for displaying structured data from API responses:
+- [WeatherComponent.tsx](mdc:components/WeatherComponent.tsx) - Weather data visualization
+- [EarthquakeComponent.tsx](mdc:components/EarthquakeComponent.tsx) - Earthquake data visualization
+- [ExchangeRateComponent.tsx](mdc:components/ExchangeRateComponent.tsx) - Currency exchange data
+- [StockComponent.tsx](mdc:components/StockComponent.tsx) - Stock market data
+- [CoinComponent.tsx](mdc:components/CoinComponent.tsx) - Cryptocurrency data

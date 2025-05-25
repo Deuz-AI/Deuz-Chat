@@ -1,0 +1,31 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Chat Session Model
+
+## Session Flow
+1. User lands on [app/page.tsx](mdc:app/page.tsx) which either:
+   - Redirects to an existing session if one exists with messages
+   - Creates a new session if none exist
+
+2. Sessions are viewed at [app/[sessionId]/page.tsx](mdc:app/[sessionId]/page.tsx)
+
+## Session Data Model
+- Each session has a unique UUID and title
+- Sessions contain messages in a one-to-many relationship
+- Session titles are automatically generated from the first user message
+
+## Messages
+- Messages have roles: 'user' or 'assistant'
+- Messages contain content that can be text or structured data
+- Messages are stored in both Zustand state and Supabase
+- Response messages track response time for performance monitoring
+
+## Session Management
+The sidebar ([components/chat/Sidebar.tsx](mdc:components/chat/Sidebar.tsx)) provides:
+- List of all sessions
+- Creation of new sessions
+- Deletion of sessions
+- Navigation between sessions

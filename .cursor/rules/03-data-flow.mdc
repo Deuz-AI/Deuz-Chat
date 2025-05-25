@@ -1,0 +1,29 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Data Flow and State Management
+
+## Store
+The application uses Zustand for state management located in [lib/store.ts](mdc:lib/store.ts). This store manages:
+- Chat sessions (create, delete, rename)
+- Messages (add, update)
+- Current session state
+- Loading states
+
+## Supabase Integration
+Database interactions are managed through the Supabase client at [lib/supabase/client.ts](mdc:lib/supabase/client.ts). The database has:
+- `sessions` table - Stores chat sessions
+- `messages` table - Stores chat messages with session relationships
+
+## API Routes
+API endpoints are organized in the [app/api/](mdc:app/api/) directory:
+- `/api/chat` - Handles chat completions and interactions with AI models
+- `/api/messages` - CRUD operations for messages
+ 
+## Data Flow
+1. User interactions trigger store actions
+2. Store actions update local state and Supabase
+3. Components react to state changes via store hooks
+4. API calls for AI interactions happen via fetch calls
