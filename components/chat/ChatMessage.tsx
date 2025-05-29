@@ -222,6 +222,10 @@ export function ChatMessage({ message, isLoading = false }: ChatMessageProps) {
     setCopiedCode(code);
   };
 
+  // Check if this is a deep search result message
+  const msgData = message as any;
+  const isDeepSearchResult = msgData.research_status === 'complete' && msgData.content;
+
   // Format whitespace for better readability
   const formattedContent = messageText.trim();
 
@@ -309,6 +313,123 @@ export function ChatMessage({ message, isLoading = false }: ChatMessageProps) {
                       // img elementini özelleştir - resim gösterimini devre dışı bırak
                       return null; // Markdown içindeki resimleri gösterme
                     },
+                    // Table support for deep search results
+                    table: ({ children, ...props }) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="min-w-full border-collapse border border-gray-300" {...props}>
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({ children, ...props }) => (
+                      <thead className="bg-gray-50" {...props}>
+                        {children}
+                      </thead>
+                    ),
+                    tbody: ({ children, ...props }) => (
+                      <tbody {...props}>
+                        {children}
+                      </tbody>
+                    ),
+                    tr: ({ children, ...props }) => (
+                      <tr className="border-b border-gray-200" {...props}>
+                        {children}
+                      </tr>
+                    ),
+                    th: ({ children, ...props }) => (
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold bg-gray-100" {...props}>
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children, ...props }) => (
+                      <td className="border border-gray-300 px-4 py-2" {...props}>
+                        {children}
+                      </td>
+                    ),
+                    // Enhanced link rendering with favicon for deep search results
+                    a: ({ href, children, ...props }) => {
+                      if (isDeepSearchResult && href) {
+                        try {
+                          const domain = new URL(href).hostname;
+                          return (
+                            <a 
+                              href={href} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                              {...props}
+                            >
+                              <img 
+                                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                                alt=""
+                                className="w-4 h-4 rounded-sm inline"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                              {children}
+                            </a>
+                          );
+                        } catch {
+                          return (
+                            <a 
+                              href={href} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 hover:underline"
+                              {...props}
+                            >
+                              {children}
+                            </a>
+                          );
+                        }
+                      }
+                      return (
+                        <a 
+                          href={href} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                          {...props}
+                        >
+                          {children}
+                        </a>
+                      );
+                    },
+                    // Enhanced headers for deep search results
+                    h1: ({ children, ...props }) => (
+                      <h1 className="text-2xl font-bold text-gray-900 mt-6 mb-4 border-b border-gray-200 pb-2" {...props}>
+                        {children}
+                      </h1>
+                    ),
+                    h2: ({ children, ...props }) => (
+                      <h2 className="text-xl font-semibold text-gray-800 mt-5 mb-3" {...props}>
+                        {children}
+                      </h2>
+                    ),
+                    h3: ({ children, ...props }) => (
+                      <h3 className="text-lg font-medium text-gray-700 mt-4 mb-2" {...props}>
+                        {children}
+                      </h3>
+                    ),
+                    // Enhanced lists for deep search results
+                    ul: ({ children, ...props }) => (
+                      <ul className="list-disc pl-6 space-y-1 my-3" {...props}>
+                        {children}
+                      </ul>
+                    ),
+                    ol: ({ children, ...props }) => (
+                      <ol className="list-decimal pl-6 space-y-1 my-3" {...props}>
+                        {children}
+                      </ol>
+                    ),
+                    // Blockquotes for key findings
+                    blockquote: ({ children, ...props }) => (
+                      <blockquote className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 text-gray-700 my-4 rounded-r" {...props}>
+                        {children}
+                      </blockquote>
+                    ),
+                    // Enhanced code formatting
                     code({ node, inline, className, children, ...props }: {
                       node?: any;
                       inline?: boolean;

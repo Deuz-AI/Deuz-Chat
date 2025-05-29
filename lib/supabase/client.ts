@@ -70,4 +70,12 @@ export type Message = {
   file_name?: string;
   attachments?: string[]; // Image URLs array
   image_url?: string;     // Geriye dönük uyumluluk için tekil resim URL'i
+  
+  // Deep Search fields
+  research_plan?: any;
+  search_results?: any;
+  analysis_results?: any;
+  research_status?: 'planning' | 'searching' | 'analyzing' | 'complete';
+  research_progress?: number;
+  research_steps?: any;
 }

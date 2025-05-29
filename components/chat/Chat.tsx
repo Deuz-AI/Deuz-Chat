@@ -5,10 +5,13 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { useChatStore } from '@/lib/store';
 import { Message, supabase } from '@/lib/supabase/client';
-import { PanelLeftClose, PanelLeft, MessageSquare } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, MessageSquare, Search, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
+import { useDeepSearch } from '@/lib/hooks/use-deep-search';
+import { ResearchProgressCard } from '@/components/deep-search/research-progress-card';
+import ReactMarkdown from 'react-markdown';
 
 type ChatProps = {
   sessionId: string | null;
@@ -38,9 +41,34 @@ const EXAMPLE_QUERIES = [
   }
 ];
 
+// Deep Search Example Queries
+const DEEP_SEARCH_QUERIES = [
+  {
+    title: "Artificial Intelligence",
+    subtitle: "comprehensive research and analysis"
+  },
+  {
+    title: "Climate Change",
+    subtitle: "latest developments and impacts"
+  },
+  {
+    title: "Quantum Computing",
+    subtitle: "current state and future prospects"
+  },
+  {
+    title: "Renewable Energy",
+    subtitle: "technologies and market trends"
+  },
+  {
+    title: "Space Exploration",
+    subtitle: "recent missions and discoveries"
+  }
+];
+
 export function Chat({ sessionId }: ChatProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isDeepSearchMode, setIsDeepSearchMode] = useState(false);
   const { 
     messages,
     addMessage,
@@ -53,6 +81,9 @@ export function Chat({ sessionId }: ChatProps) {
     updateMessageResponseTime,
     renameSession
   } = useChatStore();
+  
+  // Deep Search hook
+  const deepSearch = useDeepSearch();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showExamples, setShowExamples] = useState(true);
@@ -94,8 +125,13 @@ export function Chat({ sessionId }: ChatProps) {
     }
   }, [messages, sessionId]);
 
-  const handleSendMessage = async (content: string, attachments?: File[]) => {
+  const handleSendMessage = async (content: string, attachments?: File[], isDeepSearch = false) => {
     if (!sessionId) return;
+    
+    // Check if this is Deep Search mode
+    if (isDeepSearch) {
+      return handleDeepSearchMessage(content);
+    }
     
     // Check if this is the first message in the chat
     const isFirstMessage = !messages[sessionId] || messages[sessionId].length === 0;
@@ -316,9 +352,68 @@ export function Chat({ sessionId }: ChatProps) {
     }
   };
 
-  const handleExampleClick = (example: typeof EXAMPLE_QUERIES[0]) => {
-    handleSendMessage(`${example.title} ${example.subtitle}`);
+  const handleDeepSearchMessage = async (content: string) => {
+    if (!sessionId) return;
+    
+    // Add user message
+    const userMessageId = uuidv4();
+    await addMessage(sessionId, content, 'user', userMessageId);
+    
+    // Check if this is the first message
+    const isFirstMessage = !messages[sessionId] || messages[sessionId].length === 0;
+    if (isFirstMessage) {
+      let title = `Deep Search: ${content.trim().split(/\s+/).slice(0, 3).join(' ')}`;
+      if (title.length > 25) {
+        title = title.substring(0, 22) + '...';
+      }
+      
+      try {
+        await renameSession(sessionId, title);
+      } catch (e) {
+        console.error('Failed to rename session:', e);
+      }
+    }
+    
+    // Start deep search
+    deepSearch.startDeepSearch(content, sessionId, {
+      depth: 'basic',
+      onComplete: async (result) => {
+        // Deep search tamamlandığında mesajları yeniden fetch et
+        console.log('[CHAT] Deep search completed, refreshing messages from database');
+        try {
+          // Wait a bit to ensure database write is complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await getMessages(sessionId);
+          console.log('[CHAT] Messages refreshed successfully');
+        } catch (error) {
+          console.error('[CHAT] Error refreshing messages:', error);
+        }
+      },
+      onError: async (error) => {
+        // Add error message
+        await addMessage(
+          sessionId,
+          `Deep search encountered an error: ${error}`,
+          'assistant'
+        );
+      }
+    });
+  };
+
+  const handleExampleClick = (example: typeof EXAMPLE_QUERIES[0], isDeepSearch = false) => {
+    const query = `${example.title} ${example.subtitle}`;
+    handleSendMessage(query, undefined, isDeepSearch);
     setShowExamples(false);
+  };
+
+  const handleDeepSearchExampleClick = (example: typeof DEEP_SEARCH_QUERIES[0]) => {
+    const query = `${example.title} ${example.subtitle}`;
+    handleSendMessage(query, undefined, true);
+    setShowExamples(false);
+  };
+
+  const handleDeepSearchToggle = (isActive: boolean) => {
+    setIsDeepSearchMode(isActive);
   };
 
   // If no sessionId yet, show a loading state
@@ -347,62 +442,231 @@ export function Chat({ sessionId }: ChatProps) {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
         {/* Chat Header */}
-        <div className="flex items-center px-5 py-4 sticky top-0 z-20">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="mr-3 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-          >
-            {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
-          </Button>
+        <div className="flex items-center justify-between px-5 py-4 sticky top-0 z-20">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="mr-3 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            >
+              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
+            </Button>
+          </div>
         </div>
         
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 space-y-6 z-10 relative scrollbar-thin scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 dark:hover:scrollbar-thumb-gray-500 scrollbar-track-transparent">
           
-          {messages[sessionId]?.map((message: Message, index: number) => (
-            <ChatMessage 
-              key={message.id} 
-              message={message} 
-              isLoading={isLoading && index === messages[sessionId].length - 1 && message.role === 'assistant'}
-            />
-          ))}
+          {messages[sessionId]?.map((message: Message, index: number) => {
+            // Check if this is the last user message and next message is assistant with research_status
+            const nextMessage = messages[sessionId][index + 1];
+            const isLastUserMessageWithDeepSearch = (
+              message.role === 'user' && 
+              (index === messages[sessionId].length - 2 || index === messages[sessionId].length - 1) &&
+              (nextMessage?.research_status || deepSearch.isActive)
+            );
+
+            return (
+            <div key={message.id}>
+              <ChatMessage 
+                message={message} 
+                isLoading={isLoading && index === messages[sessionId].length - 1 && message.role === 'assistant'}
+              />
+              
+                {/* Deep Search Progress Card - Show after user message if deep search is active or completed recently */}
+                {((deepSearch.isActive || (deepSearch.status === 'complete' && deepSearch.updates.length > 0)) && 
+               message.role === 'user' && 
+                 index === messages[sessionId].length - 1) ||
+                 isLastUserMessageWithDeepSearch ? (
+                  <div className="mt-6 space-y-6">
+                  <ResearchProgressCard
+                      progress={nextMessage?.research_progress || deepSearch.progress}
+                      status={(nextMessage?.research_status as any) || deepSearch.status}
+                    updates={deepSearch.updates}
+                    totalSteps={15} // 5 searches + 10 analyses
+                      showRunningIndicators={deepSearch.isActive}
+                      researchPlan={nextMessage?.research_plan || deepSearch.researchPlan}
+                    />
+                    
+                    {/* Show streaming result only if deep search is active and has result */}
+                    {deepSearch.isActive && deepSearch.result && (
+                      <div className="mt-6">
+                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-semibold">
+                              AI
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Generating Report...
+                            </div>
+                            <div className="flex space-x-1">
+                              <div className="w-1 h-1 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' } as React.CSSProperties}></div>
+                              <div className="w-1 h-1 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' } as React.CSSProperties}></div>
+                              <div className="w-1 h-1 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' } as React.CSSProperties}></div>
+                            </div>
+                          </div>
+                          <div className="prose prose-sm max-w-none break-words">
+                            <ReactMarkdown
+                              components={{
+                                img: () => null, // Disable images in markdown
+                                a: ({ href, children, ...props }) => (
+                                  <a 
+                                    href={href} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                                    {...props}
+                                  >
+                                    {children}
+                                  </a>
+                                ),
+                                h1: ({ children, ...props }) => (
+                                  <h1 className="text-xl font-bold text-gray-900 mt-6 mb-4" {...props}>
+                                    {children}
+                                  </h1>
+                                ),
+                                h2: ({ children, ...props }) => (
+                                  <h2 className="text-lg font-semibold text-gray-800 mt-5 mb-3" {...props}>
+                                    {children}
+                                  </h2>
+                                ),
+                                h3: ({ children, ...props }) => (
+                                  <h3 className="text-base font-medium text-gray-700 mt-4 mb-2" {...props}>
+                                    {children}
+                                  </h3>
+                                ),
+                                ul: ({ children, ...props }) => (
+                                  <ul className="list-disc pl-6 space-y-1 my-3" {...props}>
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({ children, ...props }) => (
+                                  <ol className="list-decimal pl-6 space-y-1 my-3" {...props}>
+                                    {children}
+                                  </ol>
+                                ),
+                                blockquote: ({ children, ...props }) => (
+                                  <blockquote className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 text-gray-700 my-4" {...props}>
+                                    {children}
+                                  </blockquote>
+                                ),
+                                table: ({ children, ...props }) => (
+                                  <div className="overflow-x-auto my-4">
+                                    <table className="min-w-full border-collapse border border-gray-300" {...props}>
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                thead: ({ children, ...props }) => (
+                                  <thead className="bg-gray-50" {...props}>
+                                    {children}
+                                  </thead>
+                                ),
+                                tbody: ({ children, ...props }) => (
+                                  <tbody {...props}>
+                                    {children}
+                                  </tbody>
+                                ),
+                                tr: ({ children, ...props }) => (
+                                  <tr className="border-b border-gray-200" {...props}>
+                                    {children}
+                                  </tr>
+                                ),
+                                th: ({ children, ...props }) => (
+                                  <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-900 bg-gray-50" {...props}>
+                                    {children}
+                                  </th>
+                                ),
+                                td: ({ children, ...props }) => (
+                                  <td className="border border-gray-300 px-4 py-2 text-gray-700" {...props}>
+                                    {children}
+                                  </td>
+                                ),
+                                code: ({ inline, className, children, ...props }: any) => {
+                                  return inline ? (
+                                    <code className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-800 font-mono text-sm" {...props}>
+                                      {children}
+                                    </code>
+                                  ) : (
+                                    <code className="block p-3 rounded-lg bg-gray-100 text-gray-800 font-mono text-sm" {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                }
+                              }}
+                            >
+                              {deepSearch.result}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                </div>
+              )}
+            </div>
+                ) : null}
+              </div>
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
         
-        {/* EXAMPLE QUERIES MOVED HERE */}
+        {/* EXAMPLE QUERIES */}
         {showExamples && messages[sessionId]?.length === 0 && (
-            <div className="px-4 py-2 md:px-8 relative z-10">
-              <div className="flex flex-col items-center justify-center max-w-3xl mx-auto">
-                <p className="text-center mb-4 text-gray-600 text-base leading-relaxed">
-                  A multi-agent system with <span className="font-medium text-black">weather</span>, 
-                  <span className="font-medium text-black"> earthquake</span>, and 
-                  <span className="font-medium text-black"> currency</span> data capabilities
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-                  {EXAMPLE_QUERIES.map((example, index) => (
-                    <button
-                      key={index}
-                      className="text-left p-3 bg-background border border-gray-200 rounded-lg hover:border-black hover:shadow-sm transition-all duration-200"
-                      onClick={() => handleExampleClick(example)}
-                    >
-                      <p className="font-medium text-black text-sm mb-1">{example.title}</p>
-                      <p className="text-gray-500 text-xs">{example.subtitle}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
+          <div className="px-4 py-2 md:px-8 relative z-10">
+            <div className="flex flex-col items-center justify-center max-w-3xl mx-auto">
+              {isDeepSearchMode ? (
+                <>
+                  <p className="text-center mb-4 text-gray-600 text-base leading-relaxed">
+                    Deep research mode with <span className="font-medium text-purple-700">comprehensive analysis</span>, 
+                    <span className="font-medium text-purple-700"> multi-source verification</span>, and 
+                    <span className="font-medium text-purple-700"> detailed citations</span>
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                    {DEEP_SEARCH_QUERIES.map((example, index) => (
+                      <button
+                        key={index}
+                        className="text-left p-3 bg-background border border-purple-200 rounded-lg hover:border-purple-500 hover:shadow-sm transition-all duration-200"
+                        onClick={() => handleDeepSearchExampleClick(example)}
+                      >
+                        <p className="font-medium text-purple-800 text-sm mb-1">{example.title}</p>
+                        <p className="text-purple-600 text-xs">{example.subtitle}</p>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-center mb-4 text-gray-600 text-base leading-relaxed">
+                    A multi-agent system with <span className="font-medium text-black">weather</span>, 
+                    <span className="font-medium text-black"> earthquake</span>, and 
+                    <span className="font-medium text-black"> currency</span> data capabilities
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                    {EXAMPLE_QUERIES.map((example, index) => (
+                      <button
+                        key={index}
+                        className="text-left p-3 bg-background border border-gray-200 rounded-lg hover:border-black hover:shadow-sm transition-all duration-200"
+                        onClick={() => handleExampleClick(example, false)}
+                      >
+                        <p className="font-medium text-black text-sm mb-1">{example.title}</p>
+                        <p className="text-gray-500 text-xs">{example.subtitle}</p>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
         {/* Input Area */}
         <div className="sticky bottom-0 z-10 w-full p-4 md:p-5 border-t border-gray-100">
           <ChatInput 
             sessionId={sessionId} 
             onSend={handleSendMessage} 
-            isLoading={isLoading} 
+            isLoading={isLoading || deepSearch.isActive}
+            onDeepSearchToggle={handleDeepSearchToggle}
           />
         </div>
       </div>

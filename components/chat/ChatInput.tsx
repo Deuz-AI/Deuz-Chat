@@ -6,8 +6,10 @@ import { validateImageFile, createFilePreview } from '@/lib/supabase/storage';
 
 type ChatInputProps = {
   sessionId: string;
-  onSend: (content: string, attachments?: File[]) => void;
+  onSend: (content: string, attachments?: File[], isDeepSearch?: boolean) => void;
   isLoading: boolean;
+  placeholder?: string;
+  onDeepSearchToggle?: (isActive: boolean) => void;
 };
 
 interface ImagePreview {
@@ -16,7 +18,7 @@ interface ImagePreview {
   id: string;
 }
 
-export function ChatInput({ sessionId, onSend, isLoading }: ChatInputProps) {
+export function ChatInput({ sessionId, onSend, isLoading, placeholder, onDeepSearchToggle }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [searchActive, setSearchActive] = useState(false);
   const [agiBetaActive, setAgiBetaActive] = useState(false);
@@ -36,7 +38,7 @@ export function ChatInput({ sessionId, onSend, isLoading }: ChatInputProps) {
     // Extract files from attachments
     const files = imageAttachments.map(att => att.file);
     
-    onSend(message, files);
+    onSend(message, files, searchActive);
     
     // Clear the input and attachments
     setMessage('');
@@ -54,7 +56,7 @@ export function ChatInput({ sessionId, onSend, isLoading }: ChatInputProps) {
       e.preventDefault();
       if (!isLoading && (message.trim() || imageAttachments.length > 0)) {
         const files = imageAttachments.map(att => att.file);
-        onSend(message, files);
+        onSend(message, files, searchActive);
         setMessage('');
         setImageAttachments([]);
         setUploadError(null);
@@ -146,6 +148,10 @@ export function ChatInput({ sessionId, onSend, isLoading }: ChatInputProps) {
     // Focus the textarea after toggling
     if (textareaRef.current) {
       textareaRef.current.focus();
+    }
+
+    if (onDeepSearchToggle) {
+      onDeepSearchToggle(newSearchState);
     }
   };
   
@@ -270,13 +276,16 @@ export function ChatInput({ sessionId, onSend, isLoading }: ChatInputProps) {
             
             <div className="relative w-full">
               <textarea
+                key={`${searchActive}-${agiBetaActive}-${artifactActive}`}
                 ref={textareaRef}
                 placeholder={
-                  agiBetaActive 
-                    ? "Chat with AGI Beta..." 
-                    : searchActive 
-                      ? "Search with deep research..." 
-                      : "Type a message..."
+                  placeholder || (
+                    agiBetaActive 
+                      ? "Chat with AGI Beta..." 
+                      : searchActive 
+                        ? "Search with deep research..." 
+                        : "Type a message..."
+                  )
                 }
                 value={message}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
