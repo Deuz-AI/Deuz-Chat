@@ -78,4 +78,37 @@ export type Message = {
   research_status?: 'planning' | 'searching' | 'analyzing' | 'complete';
   research_progress?: number;
   research_steps?: any;
+  research_plan_links?: {
+    plan_id: string;
+    created_at: string;
+    searches: Array<{
+      step: number;
+      query: string;
+      priority: number;
+      links: Array<{
+        title: string;
+        url: string;
+        relevance: number;
+        domain: string;
+        found_at: string;
+      }>;
+      status: 'running' | 'completed' | 'failed';
+      result_count: number;
+    }>;
+    analyses: Array<{
+      step: number;
+      type: string;
+      description: string;
+      key_sources: Array<{
+        title: string;
+        url: string;
+        relevance: number;
+      }>;
+      findings_count: number;
+      status: 'running' | 'completed' | 'failed';
+    }>;
+    total_links: number;
+    unique_domains: string[];
+    completion_rate: number;
+  };
 }

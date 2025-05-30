@@ -97,6 +97,18 @@ export async function POST(req: NextRequest) {
         const researchPlan = await createResearchPlan(topic, currentDate);
         console.log('[DEEP SEARCH] Research plan created:', researchPlan);
 
+        // Initialize research plan links data
+        const planId = `plan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const planLinksData: any = {
+          plan_id: planId,
+          created_at: new Date().toISOString(),
+          searches: [],
+          analyses: [],
+          total_links: 0,
+          unique_domains: [],
+          completion_rate: 0
+        };
+
         sendUpdate('step_complete', {
           step: 1,
           title: 'Research Planning',
@@ -118,6 +130,7 @@ export async function POST(req: NextRequest) {
               role: 'assistant',
               content: '', // İlk başta boş, sonra doldurulacak
               research_plan: researchPlan,
+              research_plan_links: planLinksData,
               research_status: 'planning',
               research_progress: 10
             })
@@ -152,6 +165,29 @@ export async function POST(req: NextRequest) {
           const result = await executeWebSearch(search.query, depth, search.priority);
           searchResults.push(result);
 
+          // Update plan links with search results
+          const searchLinkData = {
+            step: stepNumber,
+            query: search.query,
+            priority: search.priority,
+            links: result.results?.map((r: any) => ({
+              title: r.title,
+              url: r.url,
+              relevance: 0.8,
+              domain: new URL(r.url).hostname,
+              found_at: new Date().toISOString()
+            })) || [],
+            status: 'completed' as const,
+            result_count: result.results?.length || 0
+          };
+
+          planLinksData.searches.push(searchLinkData);
+          planLinksData.total_links += result.results?.length || 0;
+
+          // Update unique domains
+          const newDomains = result.results?.map((r: any) => new URL(r.url).hostname) || [];
+          planLinksData.unique_domains = [...new Set([...planLinksData.unique_domains, ...newDomains])];
+
           sendUpdate('step_complete', {
             step: stepNumber,
             title: `Web Search ${i + 1}`,
@@ -171,10 +207,11 @@ export async function POST(req: NextRequest) {
           currentProgress = Math.round(((stepNumber) / (5 + researchPlan.analyses.length)) * 70); // 70% for searches
           sendUpdate('progress', { progress: currentProgress });
           
-          // Update database
+          // Update database with plan links
           if (assistantMessageId) {
             await updateMessageInDatabase(assistantMessageId, {
               search_results: searchResults,
+              research_plan_links: planLinksData,
               research_status: currentStatus,
               research_progress: currentProgress
             });
@@ -205,6 +242,23 @@ export async function POST(req: NextRequest) {
             result
           });
 
+          // Update plan links with analysis results
+          const analysisLinkData = {
+            step: stepNumber,
+            type: analysis.type,
+            description: analysis.description,
+            key_sources: result.key_sources?.map((source: any) => ({
+              title: source.title,
+              url: source.url,
+              relevance: source.relevance || 0.7
+            })) || [],
+            findings_count: result.findings?.length || 0,
+            status: 'completed' as const
+          };
+
+          planLinksData.analyses.push(analysisLinkData);
+          planLinksData.completion_rate = Math.round(((i + 1) / researchPlan.analyses.length) * 100);
+
           sendUpdate('step_complete', {
             step: stepNumber,
             title: `Analysis ${i + 1}: ${analysis.type}`,
@@ -222,10 +276,11 @@ export async function POST(req: NextRequest) {
           currentProgress = Math.round(70 + ((i + 1) / researchPlan.analyses.length) * 25); // 25% for analyses
           sendUpdate('progress', { progress: currentProgress });
           
-          // Update database
+          // Update database with plan links
           if (assistantMessageId) {
             await updateMessageInDatabase(assistantMessageId, {
               analysis_results: analysisResults,
+              research_plan_links: planLinksData,
               research_status: currentStatus,
               research_progress: currentProgress
             });
@@ -294,28 +349,41 @@ IMPORTANT FORMATTING REQUIREMENTS:
 1. Use markdown formatting with proper headers (# ## ###)
 2. Include executive summary at the beginning
 3. Organize content in logical sections
-4. Add citations using numbered references [1], [2], etc.
-5. Include a comprehensive "Sources and References" section at the end
+4. **ADD CLICKABLE CITATIONS: Use format [Source 1](${allSources[0]?.url || '#'}) instead of [1]**
+5. **MANDATORY: Include a "Sources and References" section at the end with ALL ${allSources.length} sources**
 6. Make the report professional, detailed, and well-structured
 7. Use bullet points and numbered lists where appropriate
-8. **ALWAYS use markdown tables for comparative data (| Column | Column | format)**
+8. **CRITICAL: For any comparative data, statistics, or structured information, ALWAYS use proper markdown table format:**
+   - Start with column headers separated by pipes: | Column 1 | Column 2 | Column 3 |
+   - Add separator row with dashes: |----------|----------|----------|
+   - Add data rows: | Data 1 | Data 2 | Data 3 |
+   - Example:
+     | Metric | Value | Source |
+     |--------|-------|--------|
+     | Revenue | $100M | Report |
 9. Include key findings, implications, and recommendations
 10. Ensure all claims are backed by the research data provided
+11. The final report MUST be written in the same language as the user's initial deep search prompt. Automatically detect the language of the prompt and generate the report in that language. Do NOT answer in any other language!
+12. **TABLE REQUIREMENT: Any numerical data, comparisons, statistics, timelines, or structured data MUST be presented in markdown table format**
 
-CITATION MAPPING:
-${Array.from(sourceMap.entries()).map(([url, num]) => `[${num}] ${url}`).join('\n')}
+CITATION FORMAT INSTRUCTIONS:
+- Use hybrid format: "[1. MIT AI Study](url)", "[2. TechCrunch Analysis](url)"
+- Provides both numbering for organization and immediate clickability
+- Keep descriptions concise but informative
+- **IMPORTANT: You must include a "Sources and References" section at the end listing all ${allSources.length} sources**
 
-The report should be publication-quality with proper academic formatting, clear conclusions, and actionable insights. Include confidence levels for major claims and highlight any limitations or areas needing further research.
+NUMBERED CLICKABLE SOURCES TO USE IN REPORT:
+${allSources.map((source, index) => `[${index + 1}. ${source.title.slice(0, 40)}...](${source.url})`).join('\n')}
 
-Make sure to cite sources using the numbered references throughout the text, especially for statistical data, quotes, and specific findings.
+**MANDATORY SOURCES SECTION FORMAT:**
+At the end of your report, include:
 
-**MANDATORY: For any comparative analysis sections, you MUST use proper markdown table format with pipes (|). For example:**
-| Technology | Definition | Use Cases |
-|------------|------------|-----------|
-| AI | Broad field mimicking human intelligence | Robotics, NLP, decision-making |
-| Machine Learning | Subset of AI | Fraud detection, recommendation systems |
+## Sources and References
 
-Always format tabular data this way for better readability.`;
+${allSources.map((source, index) => `**[${index + 1}]** [${source.title}](${source.url})`).join('\n')}
+
+---
+*Research completed on ${new Date().toLocaleDateString('tr-TR')} using Deep Search technology with ${allSources.length} verified sources.*`;
         
         const { textStream } = await streamText({
           model: deepseek('deepseek-chat'),
@@ -341,20 +409,8 @@ Always format tabular data this way for better readability.`;
           sendUpdate('report_chunk', { chunk });
         }
 
-        // Add formatted sources section to the report
-        const sourcesSection = `
-
-## 📚 Sources and References
-
-${allSources.map((source, index) => 
-  `**[${index + 1}]** [${source.title}](${source.url})${source.relevance ? ` (Relevance: ${Math.round(source.relevance * 100)}%)` : ''}`
-).join('\n\n')}
-
----
-
-*Research completed on ${new Date().toLocaleDateString('tr-TR')} using Deep Search technology with multiple source verification and analysis.*`;
-
-        const finalReport = reportContent + sourcesSection;
+        // Otomatik olarak Sources and References eklemeyelim - rapor kendisi ekleyecek
+        const finalReport = reportContent;
 
         sendUpdate('report_complete', { 
           fullReport: finalReport,
@@ -369,17 +425,28 @@ ${allSources.map((source, index) =>
 
         // Final database update with complete report
         if (assistantMessageId) {
+          // Mark plan as complete
+          planLinksData.completion_rate = 100;
+          
           await updateMessageInDatabase(assistantMessageId, {
             content: finalReport,
             research_status: currentStatus,
             research_progress: currentProgress,
+            research_plan_links: planLinksData, // Final plan links
             research_steps: {
               planning: true,
               searching: true,
               analyzing: true,
               complete: true
             },
-            citation_sources: allSources
+            citation_sources: allSources.map((source, index) => ({
+              id: index + 1,
+              title: source.title,
+              url: source.url,
+              domain: new URL(source.url).hostname,
+              relevance: source.relevance || 0.7,
+              category: categorizeSource(source.title, source.url)
+            }))
           });
         }
 
@@ -496,4 +563,18 @@ async function analyzeResults(searchResults: any[], analysisType: string, analys
   });
   
   return analysisResult;
+}
+
+// Kaynak kategorilendirme fonksiyonu
+function categorizeSource(title: string, url: string): string {
+  const domain = new URL(url).hostname.toLowerCase();
+  const titleLower = title.toLowerCase();
+  
+  if (domain.includes('academic') || domain.includes('edu') || domain.includes('research')) return 'academic';
+  if (domain.includes('news') || domain.includes('bbc') || domain.includes('reuters')) return 'news';
+  if (domain.includes('gov') || domain.includes('official')) return 'official';
+  if (titleLower.includes('study') || titleLower.includes('research')) return 'research';
+  if (titleLower.includes('analysis') || titleLower.includes('report')) return 'analysis';
+  
+  return 'general';
 } 

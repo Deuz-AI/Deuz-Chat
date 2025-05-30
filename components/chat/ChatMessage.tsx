@@ -2,6 +2,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Message } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Weather } from '@/components/WeatherComponent';
@@ -308,41 +309,42 @@ export function ChatMessage({ message, isLoading = false }: ChatMessageProps) {
               <>
                 {/* Metin içeriği */}
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
                     img: ({ node, ...props }) => {
                       // img elementini özelleştir - resim gösterimini devre dışı bırak
                       return null; // Markdown içindeki resimleri gösterme
                     },
-                    // Table support for deep search results
+                    // Table support for deep search results - Enhanced for better rendering
                     table: ({ children, ...props }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="min-w-full border-collapse border border-gray-300" {...props}>
+                      <div className="overflow-x-auto my-6 rounded-lg border border-gray-200 bg-white shadow-sm">
+                        <table className="min-w-full border-collapse table-auto" {...props}>
                           {children}
                         </table>
                       </div>
                     ),
                     thead: ({ children, ...props }) => (
-                      <thead className="bg-gray-50" {...props}>
+                      <thead className="bg-gray-50 border-b-2 border-gray-200" {...props}>
                         {children}
                       </thead>
                     ),
                     tbody: ({ children, ...props }) => (
-                      <tbody {...props}>
+                      <tbody className="divide-y divide-gray-100 bg-white" {...props}>
                         {children}
                       </tbody>
                     ),
                     tr: ({ children, ...props }) => (
-                      <tr className="border-b border-gray-200" {...props}>
+                      <tr className="hover:bg-gray-50 transition-colors duration-150" {...props}>
                         {children}
                       </tr>
                     ),
                     th: ({ children, ...props }) => (
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold bg-gray-100" {...props}>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider border-r border-gray-200 last:border-r-0" {...props}>
                         {children}
                       </th>
                     ),
                     td: ({ children, ...props }) => (
-                      <td className="border border-gray-300 px-4 py-2" {...props}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100 last:border-r-0" {...props}>
                         {children}
                       </td>
                     ),

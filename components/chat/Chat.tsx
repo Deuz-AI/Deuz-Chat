@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useDeepSearch } from '@/lib/hooks/use-deep-search';
 import { ResearchProgressCard } from '@/components/deep-search/research-progress-card';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type ChatProps = {
   sessionId: string | null;
@@ -110,6 +111,38 @@ export function Chat({ sessionId }: ChatProps) {
     
     initializeChat();
   }, [sessionId, createSession, setCurrentSessionId, getMessages, router]);
+
+  // Ayrı bir useEffect ile deep search recovery işlemi
+  useEffect(() => {
+    const checkDeepSearchRecovery = async () => {
+      if (!sessionId || !messages[sessionId || '']) return;
+      
+      const currentMessages = messages[sessionId || ''] || [];
+      const lastMessage = currentMessages[currentMessages.length - 1];
+      
+      // Son mesaj assistant'ın olduğu ve research verisi içeren bir deep search mesajı mı kontrol et
+      if (lastMessage && 
+          lastMessage.role === 'assistant' && 
+          (lastMessage as any).research_plan_links &&
+          (lastMessage as any).research_status === 'complete') {
+        
+        console.log('[CHAT] Deep search recovery needed for message:', lastMessage.id);
+        console.log('[CHAT] Research data found:', (lastMessage as any).research_plan_links);
+        
+        // Recovery işlemini gerçekleştir
+        const success = await deepSearch.recoverFromDatabase(lastMessage);
+        if (success) {
+          console.log('[CHAT] Deep search recovery successful');
+        } else {
+          console.log('[CHAT] Deep search recovery failed');
+        }
+      }
+    };
+    
+    // Kısa bir gecikme ile recovery kontrolü yap
+    const timeoutId = setTimeout(checkDeepSearchRecovery, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [sessionId, messages]);
 
   useEffect(() => {
     // Scroll to bottom whenever messages change
@@ -488,6 +521,7 @@ export function Chat({ sessionId }: ChatProps) {
                     totalSteps={15} // 5 searches + 10 analyses
                       showRunningIndicators={deepSearch.isActive}
                       researchPlan={nextMessage?.research_plan || deepSearch.researchPlan}
+                      finalSources={deepSearch.finalSources}
                     />
                     
                     {/* Show streaming result only if deep search is active and has result */}
@@ -509,6 +543,7 @@ export function Chat({ sessionId }: ChatProps) {
                           </div>
                           <div className="prose prose-sm max-w-none break-words">
                             <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
                               components={{
                                 img: () => null, // Disable images in markdown
                                 a: ({ href, children, ...props }) => (
@@ -553,34 +588,34 @@ export function Chat({ sessionId }: ChatProps) {
                                   </blockquote>
                                 ),
                                 table: ({ children, ...props }) => (
-                                  <div className="overflow-x-auto my-4">
-                                    <table className="min-w-full border-collapse border border-gray-300" {...props}>
+                                  <div className="overflow-x-auto my-6 rounded-lg border border-gray-200 bg-white shadow-sm">
+                                    <table className="min-w-full border-collapse table-auto" {...props}>
                                       {children}
                                     </table>
                                   </div>
                                 ),
                                 thead: ({ children, ...props }) => (
-                                  <thead className="bg-gray-50" {...props}>
+                                  <thead className="bg-gray-50 border-b-2 border-gray-200" {...props}>
                                     {children}
                                   </thead>
                                 ),
                                 tbody: ({ children, ...props }) => (
-                                  <tbody {...props}>
+                                  <tbody className="divide-y divide-gray-100 bg-white" {...props}>
                                     {children}
                                   </tbody>
                                 ),
                                 tr: ({ children, ...props }) => (
-                                  <tr className="border-b border-gray-200" {...props}>
+                                  <tr className="hover:bg-gray-50 transition-colors duration-150" {...props}>
                                     {children}
                                   </tr>
                                 ),
                                 th: ({ children, ...props }) => (
-                                  <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-900 bg-gray-50" {...props}>
+                                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider border-r border-gray-200 last:border-r-0" {...props}>
                                     {children}
                                   </th>
                                 ),
                                 td: ({ children, ...props }) => (
-                                  <td className="border border-gray-300 px-4 py-2 text-gray-700" {...props}>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100 last:border-r-0" {...props}>
                                     {children}
                                   </td>
                                 ),

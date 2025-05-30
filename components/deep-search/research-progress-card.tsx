@@ -21,6 +21,7 @@ interface ResearchProgressCardProps {
   totalSteps: number;
   showRunningIndicators?: boolean;
   researchPlan?: any;
+  finalSources?: Array<{ title: string; url: string; relevance?: number }> | null;
 }
 
 export const ResearchProgressCard: React.FC<ResearchProgressCardProps> = ({
@@ -29,7 +30,8 @@ export const ResearchProgressCard: React.FC<ResearchProgressCardProps> = ({
   updates,
   totalSteps,
   showRunningIndicators = false,
-  researchPlan
+  researchPlan,
+  finalSources
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showAllSources, setShowAllSources] = useState(false);
@@ -85,12 +87,53 @@ export const ResearchProgressCard: React.FC<ResearchProgressCardProps> = ({
   };
 
   const getAllLinks = () => {
+    // Eğer backend'den finalSources geliyorsa onu kullan (daha doğru sayı)
+    if (finalSources && finalSources.length > 0) {
+      return finalSources.map(source => ({ ...source, type: 'final' }));
+    }
+    
+    // Yoksa eski mantığı kullan (updates'den topla) - ama daha akıllıca
     const allLinks: any[] = [];
+    const linkUrlsSet = new Set<string>(); // Duplicate URL'leri önlemek için
+    
+    // Önce search step'lerinden linkleri topla
     sortedUpdates.forEach(update => {
-      if (update.data?.sources) update.data.sources.forEach((source: any) => allLinks.push({ ...source, type: 'source' }));
-      if (update.data?.keyLinks) update.data.keyLinks.forEach((link: any) => allLinks.push({ ...link, type: 'key' }));
+      if (update.data?.sources) {
+        update.data.sources.forEach((source: any) => {
+          if (source.url && !linkUrlsSet.has(source.url)) {
+            linkUrlsSet.add(source.url);
+            allLinks.push({ ...source, type: 'source' });
+          }
+        });
+      }
+      
+      if (update.data?.keyLinks) {
+        update.data.keyLinks.forEach((link: any) => {
+          if (link.url && !linkUrlsSet.has(link.url)) {
+            linkUrlsSet.add(link.url);
+            allLinks.push({ ...link, type: 'key' });
+          }
+        });
+      }
     });
-    return allLinks.filter((link, index, self) => index === self.findIndex(l => l.url === link.url));
+    
+    // Eğer research plan'dan da link verisi varsa onları da ekle
+    if (researchPlan?.searches) {
+      researchPlan.searches.forEach((searchItem: any, searchIndex: number) => {
+        const currentSearchStep = searchIndex + 2; 
+        const relatedUpdate = sortedUpdates.find(upd => upd.step === currentSearchStep && upd.status === 'completed');
+        const sourcesForThisSearch = relatedUpdate?.data?.sources || [];
+        
+        sourcesForThisSearch.forEach((source: any) => {
+          if (source.url && !linkUrlsSet.has(source.url)) {
+            linkUrlsSet.add(source.url);
+            allLinks.push({ ...source, type: 'source' });
+          }
+        });
+      });
+    }
+    
+    return allLinks;
   };
 
   const allCollectedLinks = getAllLinks();
@@ -142,7 +185,7 @@ export const ResearchProgressCard: React.FC<ResearchProgressCardProps> = ({
                     <div className="space-y-2">
                       {researchPlan.searches.map((searchItem: any, searchIndex: number) => {
                         const currentSearchStep = searchIndex + 2; 
-                        const relatedUpdate = sortedUpdates.find(upd => upd.step === currentSearchStep && upd.status === 'completed');
+                        const relatedUpdate = sortedUpdates.find(upd => upd.step === currentSearchStep);
                         const sourcesForThisSearch = relatedUpdate?.data?.sources;
 
                         return (
@@ -191,19 +234,31 @@ export const ResearchProgressCard: React.FC<ResearchProgressCardProps> = ({
                       Analysis Steps
                     </h5>
                     <div className="space-y-2">
-                      {researchPlan.analyses.map((analysis: any, index: number) => (
-                        <div
-                          key={`analysis-${index}`}
-                          className="flex items-center gap-2.5 text-sm p-3 rounded-md bg-gray-800/60 border border-gray-700/80"
-                        >
-                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center">
-                            {getAnalysisIcon(analysis.type)}
+                      {researchPlan.analyses.map((analysis: any, index: number) => {
+                        const totalSearches = researchPlan.searches?.length || 0;
+                        const currentAnalysisStep = totalSearches + 2 + index;
+                        const relatedUpdate = sortedUpdates.find(upd => upd.step === currentAnalysisStep);
+                        const isRunning = relatedUpdate?.status === 'running';
+
+                        return (
+                          <div
+                            key={`analysis-${index}`}
+                            className={cn(
+                              "flex items-center gap-2.5 text-sm p-3 rounded-md",
+                              isRunning
+                                ? "bg-gray-800/60 border-2 border-green-500"
+                                : "bg-gray-800/60 border border-gray-700/80"
+                            )}
+                          >
+                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center">
+                              {getAnalysisIcon(analysis.type)}
+                            </div>
+                            <span className="text-sm text-gray-200 truncate">
+                              {analysis.type}: <span className="text-gray-400 text-xs">{analysis.description.substring(0,30)}{analysis.description.length > 30 ? '...' : ''}</span>
+                            </span>
                           </div>
-                          <span className="text-sm text-gray-200 truncate">
-                            {analysis.type}: <span className="text-gray-400 text-xs">{analysis.description.substring(0,30)}{analysis.description.length > 30 ? '...' : ''}</span>
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

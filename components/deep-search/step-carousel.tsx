@@ -87,20 +87,28 @@ export const StepCarousel: React.FC<StepCarouselProps> = ({ updates }) => {
     <div className="space-y-4">
       {/* Step indicators */}
       <div className="flex items-center justify-center gap-1 sm:gap-2">
-        {updates.map((update, index) => (
-          <button
-            key={update.id}
-            onClick={() => goToStep(index)}
-            className={cn(
-              "flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium transition-all duration-200",
-              index === currentIndex
-                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-200 dark:ring-blue-800"
-                : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-            )}
-          >
-            {update.step}
-          </button>
-        ))}
+        {updates.map((update, index) => {
+          const isActive = index === currentIndex;
+          const isRunning = update.status === 'running';
+          const isAnalysisStep = update.step >= 7; // Analysis steps start from step 7
+          
+          return (
+            <button
+              key={update.id}
+              onClick={() => goToStep(index)}
+              className={cn(
+                "flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium transition-all duration-200",
+                isRunning && isAnalysisStep
+                  ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 ring-2 ring-green-500"
+                  : isActive
+                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-200 dark:ring-blue-800"
+                  : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+              )}
+            >
+              {update.step}
+            </button>
+          );
+        })}
       </div>
 
       {/* Main content */}

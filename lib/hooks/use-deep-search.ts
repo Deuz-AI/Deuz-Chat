@@ -11,6 +11,8 @@ export interface DeepSearchState {
   result: string | null;
   error: string | null;
   researchPlan: any | null;
+  finalSources: Array<{ title: string; url: string; relevance?: number }> | null;
+  planLinks: any | null;
 }
 
 export interface DeepSearchOptions {
@@ -30,7 +32,9 @@ export const useDeepSearch = () => {
     updates: [],
     result: null,
     error: null,
-    researchPlan: null
+    researchPlan: null,
+    finalSources: null,
+    planLinks: null
   });
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -89,7 +93,9 @@ export const useDeepSearch = () => {
       updates: [],
       result: null,
       error: null,
-      researchPlan: null
+      researchPlan: null,
+      finalSources: null,
+      planLinks: null
     });
 
     try {
@@ -238,6 +244,7 @@ export const useDeepSearch = () => {
         setState(prev => ({
           ...prev,
           result: eventData.data.fullReport,
+          finalSources: eventData.data.sources || null,
           isActive: false,
           progress: 100,
           status: 'complete'
@@ -285,8 +292,112 @@ export const useDeepSearch = () => {
       updates: [],
       result: null,
       error: null,
-      researchPlan: null
+      researchPlan: null,
+      finalSources: null,
+      planLinks: null
     });
+  }, []);
+
+  // F5 sonrası recovery fonksiyonu
+  const recoverFromDatabase = useCallback(async (messageData: any) => {
+    if (!messageData) return false;
+
+    const { 
+      research_plan_links, 
+      research_plan, 
+      research_status, 
+      research_progress,
+      content,
+      citation_sources 
+    } = messageData;
+
+    if (!research_plan_links) return false;
+
+    // Create updates from plan links data
+    const recoveredUpdates: ResearchUpdate[] = [];
+
+    // Add planning step
+    if (research_plan) {
+      recoveredUpdates.push({
+        id: `recovery_planning_${Date.now()}`,
+        step: 1,
+        title: 'Research Planning',
+        description: 'Research plan created successfully',
+        status: 'completed',
+        timestamp: research_plan_links.created_at
+      });
+    }
+
+    // Add search steps
+    research_plan_links.searches?.forEach((search: any) => {
+      recoveredUpdates.push({
+        id: `recovery_search_${search.step}`,
+        step: search.step,
+        title: `Web Search ${search.step - 1}`,
+        description: `Found ${search.result_count} sources for "${search.query}"`,
+        status: search.status,
+        timestamp: search.found_at || research_plan_links.created_at,
+        data: {
+          query: search.query,
+          resultCount: search.result_count,
+          sources: search.links?.slice(0, 4).map((link: any) => ({
+            title: link.title,
+            url: link.url
+          })) || []
+        }
+      });
+    });
+
+    // Add analysis steps  
+    research_plan_links.analyses?.forEach((analysis: any) => {
+      recoveredUpdates.push({
+        id: `recovery_analysis_${analysis.step}`,
+        step: analysis.step,
+        title: `Analysis ${analysis.step - 6}: ${analysis.type}`,
+        description: `Analysis completed - ${analysis.findings_count} key findings`,
+        status: analysis.status,
+        timestamp: research_plan_links.created_at,
+        data: {
+          type: analysis.type,
+          findingsCount: analysis.findings_count,
+          keyLinks: analysis.key_sources?.slice(0, 4) || []
+        }
+      });
+    });
+
+    // Add final report step if completed
+    if (research_status === 'complete' && content) {
+      recoveredUpdates.push({
+        id: `recovery_report_${Date.now()}`,
+        step: 12,
+        title: 'Final Report Generation',
+        description: 'Report generated successfully',
+        status: 'completed',
+        timestamp: research_plan_links.created_at
+      });
+    }
+
+    // Restore state
+    setState({
+      isActive: research_status !== 'complete',
+      progress: research_progress || 0,
+      status: research_status || 'planning',
+      updates: recoveredUpdates,
+      result: content || null,
+      error: null,
+      researchPlan: research_plan,
+      finalSources: citation_sources && citation_sources.length > 0 
+        ? citation_sources.map((source: any) => ({
+            title: source.title,
+            url: source.url,
+            relevance: source.relevance || 0.7
+          }))
+        : null,
+      planLinks: research_plan_links
+    });
+
+    console.log('[DEEP SEARCH RECOVERY] Successfully recovered from database:', research_plan_links);
+    return true;
   }, []);
 
   return {
@@ -294,6 +405,7 @@ export const useDeepSearch = () => {
     startDeepSearch,
     stopDeepSearch,
     resetDeepSearch,
+    recoverFromDatabase,
     addUpdate,
     updateProgress
   };
